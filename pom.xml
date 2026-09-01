@@ -1,74 +1,201 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
 	<modelVersion>4.0.0</modelVersion>
+
+	<!-- =========================================================
+         Spring Boot Parent
+         TechNotes standard: Spring Boot 3.5.x
+         ========================================================= -->
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>4.0.8</version>
-		<relativePath/> <!-- lookup parent from repository -->
+		<version>3.5.16</version>
+		<relativePath/>
 	</parent>
+
+
+	<!-- =========================================================
+         Project Information
+         ========================================================= -->
 	<groupId>com.technotes</groupId>
 	<artifactId>technotes-api-gateway</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name/>
-	<description/>
-	<url/>
-	<licenses>
-		<license/>
-	</licenses>
-	<developers>
-		<developer/>
-	</developers>
-	<scm>
-		<connection/>
-		<developerConnection/>
-		<tag/>
-		<url/>
-	</scm>
+
+	<name>technotes-api-gateway</name>
+
+	<description>
+		API Gateway service for TechNotes microservices platform
+	</description>
+
+
+	<!-- =========================================================
+         Project Properties
+         ========================================================= -->
 	<properties>
+
+		<!-- Java version used across TechNotes services -->
 		<java.version>21</java.version>
-		<spring-cloud.version>2025.1.3</spring-cloud.version>
+
+		<!-- Compatible Spring Cloud release train -->
+		<spring-cloud.version>2025.0.3</spring-cloud.version>
+
 	</properties>
+
+
+	<!-- =========================================================
+         Dependencies
+         ========================================================= -->
 	<dependencies>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-actuator</artifactId>
-		</dependency>
+
+
+		<!--
+        ============================================================
+        Spring Cloud Gateway
+        ============================================================
+
+        Main API Gateway dependency.
+
+        Responsibilities:
+        - Request routing
+        - Gateway filters
+        - Authentication filters later
+        - Load-balanced routing
+        - Central entry point for microservices
+        -->
 		<dependency>
 			<groupId>org.springframework.cloud</groupId>
-			<artifactId>spring-cloud-starter-gateway-server-webmvc</artifactId>
+			<artifactId>spring-cloud-starter-gateway</artifactId>
 		</dependency>
+
+
+		<!--
+        ============================================================
+        Eureka Discovery Client
+        ============================================================
+
+        Allows API Gateway to:
+
+        1. Register itself with Eureka Server
+        2. Discover other TechNotes microservices
+        3. Route requests using service names
+
+        Example later:
+
+        lb://TECHNOTES-NOTES-SERVICE
+        -->
 		<dependency>
 			<groupId>org.springframework.cloud</groupId>
 			<artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
 		</dependency>
 
+
+		<!--
+        ============================================================
+        Spring Boot Actuator
+        ============================================================
+
+        Provides production/monitoring endpoints.
+
+        Example:
+
+        /actuator/health
+        /actuator/info
+        -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-actuator-test</artifactId>
+			<artifactId>spring-boot-starter-actuator</artifactId>
+		</dependency>
+
+
+		<!--
+        ============================================================
+        Testing
+        ============================================================
+        -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+
+
 	</dependencies>
+
+
+	<!-- =========================================================
+         Spring Cloud Dependency Management
+         =========================================================
+
+         Instead of specifying versions individually for:
+
+         Eureka
+         Gateway
+         Config
+         etc.
+
+         Spring Cloud BOM manages compatible versions.
+         ========================================================= -->
 	<dependencyManagement>
+
 		<dependencies>
+
 			<dependency>
+
 				<groupId>org.springframework.cloud</groupId>
-				<artifactId>spring-cloud-dependencies</artifactId>
-				<version>${spring-cloud.version}</version>
+
+				<artifactId>
+					spring-cloud-dependencies
+				</artifactId>
+
+				<version>
+					${spring-cloud.version}
+				</version>
+
 				<type>pom</type>
+
 				<scope>import</scope>
+
 			</dependency>
+
 		</dependencies>
+
 	</dependencyManagement>
 
+
+	<!-- =========================================================
+         Build Configuration
+         ========================================================= -->
 	<build>
+
 		<plugins>
+
+			<!--
+            Creates executable Spring Boot JAR.
+
+            Later:
+
+            java -jar technotes-api-gateway.jar
+            -->
 			<plugin>
-				<groupId>org.springframework.boot</groupId>
-				<artifactId>spring-boot-maven-plugin</artifactId>
+
+				<groupId>
+					org.springframework.boot
+				</groupId>
+
+				<artifactId>
+					spring-boot-maven-plugin
+				</artifactId>
+
 			</plugin>
+
 		</plugins>
+
 	</build>
+
 
 </project>
