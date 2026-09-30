@@ -1,5 +1,5 @@
 server:
-  port: 8080
+  port: ${SERVER_PORT}
 
 spring:
   application:
@@ -8,30 +8,56 @@ spring:
     gateway:
       server:
         webflux:
+          httpclient:
+            connect-timeout: ${GATEWAY_CONNECT_TIMEOUT_MS}
+            response-timeout: ${GATEWAY_RESPONSE_TIMEOUT}
           discovery:
             locator:
               enabled: false
-          # OAuth also emits CORS headers; browsers require a single origin value.
           default-filters:
             - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials, RETAIN_FIRST
           routes:
-            - id: notes-service
-              uri: ${NOTES_SERVICE_URL:http://localhost:8081}
+            - id: public-categories
+              uri: ${NOTES_SERVICE_URL}
               predicates:
-                - Path=/api/v1/categories,/api/v1/categories/**,/api/v1/notes,/api/v1/notes/**,/api/v1/public/categories,/api/v1/public/notes,/api/v1/public/notes/**
+                - Path=/api/v1/public/categories
+                - Method=GET
+            - id: public-notes
+              uri: ${NOTES_SERVICE_URL}
+              predicates:
+                - Path=/api/v1/public/notes,/api/v1/public/notes/{slug}
+                - Method=GET
+            - id: create-category
+              uri: ${NOTES_SERVICE_URL}
+              predicates:
+                - Path=/api/v1/categories
+                - Method=POST
+            - id: notes-collection
+              uri: ${NOTES_SERVICE_URL}
+              predicates:
+                - Path=/api/v1/notes
+                - Method=GET,POST
+            - id: note-detail
+              uri: ${NOTES_SERVICE_URL}
+              predicates:
+                - Path=/api/v1/notes/{id}
+                - Method=GET,PATCH
+            - id: note-workflow
+              uri: ${NOTES_SERVICE_URL}
+              predicates:
+                - Path=/api/v1/notes/{id}/submit,/api/v1/notes/{id}/publish
+                - Method=POST
             - id: user-profile
-              uri: ${USER_OAUTH_SERVICE_URL:http://localhost:9000}
+              uri: ${USER_OAUTH_SERVICE_URL}
               predicates:
                 - Path=/api/v1/users/me
                 - Method=GET
-          # Pass the original path, Bearer token and If-Match through unchanged.
-          # Authentication and authorization remain in the downstream services.
           globalcors:
             add-to-simple-url-handler-mapping: true
             cors-configurations:
               '[/api/v1/**]':
                 allowedOrigins:
-                  - ${UI_ORIGIN:http://localhost:5173}
+                  - ${UI_ORIGIN}
                 allowedMethods:
                   - GET
                   - POST
@@ -45,9 +71,19 @@ spring:
                   - ETag
                   - Location
                 allowCredentials: false
-                maxAge: 3600
+                maxAge: ${CORS_MAX_AGE_SECONDS}
 
 eureka:
   client:
+    enabled: ${EUREKA_CLIENT_ENABLED}
     service-url:
-      defaultZone: http://localhost:8761/eureka/
+      defaultZone: ${EUREKA_URL}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never

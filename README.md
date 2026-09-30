@@ -1,89 +1,125 @@
-# TechNotes API Gateway
+# TechNotes API Gateway — first live
 
-Java 21, Spring Boot 3.5.16 and Spring Cloud 2025.0.3. Gateway port: **8080**.
+Java 21, Spring Boot 3.5.16, Spring Cloud 2025.0.3. Based on the documentation
+repository `develop` first-live contracts inspected at `18a62c2`.
 
-## Routes
+## Run on Windows
 
-| Gateway path | Destination (default) |
-|---|---|
-| `/api/v1/categories` and descendants | Notes, `http://localhost:8081` |
-| `/api/v1/notes` and descendants | Notes, `http://localhost:8081` |
-| `/api/v1/public/categories` | Notes, `http://localhost:8081` |
-| `/api/v1/public/notes` and descendants | Notes, `http://localhost:8081` |
-| **GET** `/api/v1/users/me` | User OAuth, `http://localhost:9000` |
-
-Paths and query strings are preserved. Request bodies, `Authorization: Bearer ...`
-and `If-Match` pass through; downstream responses retain their status, body, ETag
-and Location. There is no prefix stripping or token exchange.
-
-The gateway only routes requests. Each backend must validate tokens and enforce
-its scopes, roles and ownership rules. Routing does not implement missing backend
-endpoints or add security to an unsecured backend.
-
-## OAuth issuer stays unchanged
-
-The existing OAuth service uses `AUTH_ISSUER`, defaulting to
-`http://localhost:9000`. Do not change it to the gateway URL.
-The browser continues to use port 9000 for `/oauth2/authorize`, `/login`,
-`/oauth2/token` and `/oauth2/jwks`. These paths and discovery metadata are not
-routed through this gateway. Only the profile business API uses port 8080.
-
-## Local setup in IntelliJ / PowerShell
-
-1. Use JDK 21 and reload the Maven project.
-2. Start PostgreSQL and the OAuth service with its existing environment variables
-   and issuer on port 9000.
-3. Start MongoDB and Notes on **8081**. Its current `develop` configuration does
-   not set a port, so add `SERVER_PORT=8081` to the **Notes** IntelliJ run
-   configuration (or pass `--server.port=8081`). Otherwise it will conflict with
-   the gateway on 8080.
-4. Start Eureka on 8761 for the gateway's existing registration, or set
-   `EUREKA_CLIENT_ENABLED=false` in the gateway run configuration for standalone
-   routing. The backends currently do not configure Eureka clients, so routes
-   use direct HTTP destinations. Automatic discovery routes are disabled.
-5. Run the gateway:
-
-   ```powershell
-   .\mvnw.cmd clean test
-   .\mvnw.cmd spring-boot:run
-   ```
-
-| Gateway environment variable | Default | Purpose |
-|---|---|---|
-| `NOTES_SERVICE_URL` | `http://localhost:8081` | Notes origin, without an API path |
-| `USER_OAUTH_SERVICE_URL` | `http://localhost:9000` | Profile API destination; does not configure issuer |
-| `UI_ORIGIN` | `http://localhost:5173` | Exact browser origin allowed by gateway CORS |
-
-For containers or a remote environment, supply reachable backend origins instead
-of localhost. Issuer and token validation remain separately configured in the
-OAuth and Notes services.
-
-CORS supports GET, POST, PATCH and OPTIONS, allows Authorization, Content-Type
-and If-Match, and exposes ETag and Location. The UI sends bearer tokens without
-gateway session cookies. OAuth token-endpoint CORS remains owned by OAuth.
-
-## Smoke checks
+From the Gateway project directory, create your local configuration once:
 
 ```powershell
-curl.exe -i http://localhost:8080/actuator/health
-curl.exe -i http://localhost:8080/api/v1/public/categories
-curl.exe -i "http://localhost:8080/api/v1/public/notes?page=0&size=10"
-curl.exe -i http://localhost:8080/api/v1/users/me
-curl.exe -i -H "Authorization: Bearer $env:ACCESS_TOKEN" http://localhost:8080/api/v1/users/me
+Copy-Item .env.example .env
+notepad .env
+.\scripts\gateway.ps1 -Action Test
+.\scripts\gateway.ps1 -Action Run
 ```
 
-With the backends implemented and running, public reads should succeed; `/me`
-without a token should return the OAuth service's 401, and a valid access token
-with `profile.read` should return the profile. A downstream 404 can mean the
-endpoint has not been implemented yet. A connection error means the destination
-or backend port needs checking. Eureka availability can affect aggregate health
-when its client is enabled.
+`.env.example` contains **local examples**, not production defaults. Edit `.env`
+for your environment. The script reads plain `KEY=value` entries without
+executing their contents, checks required variables, and runs Maven. No values
+in `.env` are committed. Spring Boot does not automatically load `.env`:
+IntelliJ users must set the same values in their run configuration, or use this
+script. Keep one Gateway process running at a time.
 
-`GatewayRoutingTests` uses two isolated HTTP stub backends and the real gateway.
-It checks destination selection, paths/query strings, write payloads, bearer and
-version headers, downstream 401, CORS preflights and excluded endpoints. These
-tests do not validate real JWTs or replace the live cross-service smoke checks.
+For a release JAR:
 
-Configuration uses the Gateway 4.3 WebFlux namespace
-`spring.cloud.gateway.server.webflux` and its dedicated starter:
-[Spring reference](https://docs.spring.io/spring-cloud-gateway/reference/4.3/spring-cloud-gateway-server-webflux/starter.html).
+```powershell
+.\scripts\gateway.ps1 -Action Package
+```
+
+The executable JAR is produced under `target/`. Supply the same environment
+variables when running `java -jar` in your deployment.
+
+## Required environment
+
+`application.yaml` has no default ports, URLs, UI origins or timeout values.
+Missing configuration fails startup. Runtime configuration validates exact
+origins (no wildcard, path, embedded credentials, query or fragment) and positive
+timeouts. Only test fixtures and the local example file contain sample values.
+
+| Variable | Meaning |
+|---|---|
+| SERVER_PORT | Gateway listening port |
+| NOTES_SERVICE_URL | Reachable Notes HTTP(S) origin, no path/trailing slash |
+| USER_OAUTH_SERVICE_URL | Reachable profile-service origin, no path/trailing slash |
+| UI_ORIGIN | One exact browser origin, no trailing slash |
+| GATEWAY_CONNECT_TIMEOUT_MS | Positive connection timeout in milliseconds |
+| GATEWAY_RESPONSE_TIMEOUT | Positive response timeout duration, e.g. `10s` |
+| CORS_MAX_AGE_SECONDS | Positive preflight cache duration in seconds |
+| EUREKA_CLIENT_ENABLED | Explicit `true`/`false`; direct routes do not need Eureka |
+| EUREKA_URL | Discovery URL; required for configuration even when disabled |
+
+For public deployment, terminate HTTPS at the chosen trusted edge, configure
+exact HTTPS UI and issuer/callback values in the relevant services, and make
+backend origins reachable. Local addresses inside containers refer to those
+containers. Keep backend ports private in the deployment network. Do not trust
+arbitrary forwarded headers; configure the chosen proxy topology explicitly.
+Production DNS/compute/certificate choices are deployment decisions, not defaults
+invented here.
+
+## Fixed routes
+
+| Method | Gateway path | Destination |
+|---|---|---|
+| GET | `/api/v1/public/categories` | Notes |
+| GET | `/api/v1/public/notes`, `/api/v1/public/notes/{slug}` | Notes |
+| POST | `/api/v1/categories` | Notes |
+| GET, POST | `/api/v1/notes` | Notes |
+| GET, PATCH | `/api/v1/notes/{id}` | Notes |
+| POST | `/api/v1/notes/{id}/submit`, `/api/v1/notes/{id}/publish` | Notes |
+| GET | `/api/v1/users/me` | User/OAuth |
+
+Paths, queries, request bodies, Authorization and If-Match pass through.
+Downstream HTTP statuses/bodies, ETag and Location are preserved, including
+backend errors. Excluded methods and paths are not forwarded. CORS allows only
+the configured UI origin and GET/POST/PATCH/OPTIONS, allows Authorization,
+Content-Type and If-Match, and exposes ETag/Location. Credentials are disabled
+at the Gateway; business calls use bearer tokens.
+
+OAuth `/oauth2/authorize`, `/login`, `/oauth2/token`, `/oauth2/jwks` and discovery
+metadata stay at the issuer, not the Gateway. Gateway does not exchange tokens
+or issue identities. OAuth and Notes independently validate JWTs and scopes;
+Notes owns roles, ownership, privacy and publication rules. CORS is not API
+authorization. A downstream `401 Basic` is forwarded until Notes security is
+implemented; it is not evidence that the Gateway is a JWT resource server.
+
+## Failure behavior and health
+
+Connection refusal, DNS failure and recognized connection/response timeouts
+before response commitment return HTTP 503 with:
+
+```json
+{"timestamp":"...","status":503,"code":"SERVICE_UNAVAILABLE","message":"Requested service is temporarily unavailable.","path":"...","traceId":"...","fieldErrors":[]}
+```
+
+No internal exception text, backend address or token is put in the JSON. The
+traceId is the Gateway request ID. Already-started responses cannot be replaced
+with a new JSON response. These timeout settings bound connection establishment
+and waiting for response headers; they are not a total streamed-body deadline.
+No automatic retry is configured for writes.
+
+Only `/actuator/health` is exposed, with no component details. It describes
+Gateway health; it does not prove Notes/OAuth are reachable or secure.
+
+## Verification and remaining release gates
+
+Automated tests use isolated HTTP backends and test-only configuration: fixed
+routes/methods, payload/query/header forwarding, creation ETag/Location,
+downstream error preservation, CORS (including 503), unavailable and delayed
+backends, restricted actuator exposure and configuration validation.
+
+Real-token profile checks already supplied by Shakti: valid token 200;
+missing/malformed token 401; local preflight permitted; unconfigured origin
+rejected; Notes stopped produced the common 503 response.
+
+Before declaring the full website live, verify separately:
+
+- Notes validates issuer/audience/signature/time/ID-token rejection and scopes,
+  roles and ownership; anonymous reads never expose drafts/private content.
+- Real Notes create/edit/submit/publish responses and 428/412 pass through.
+- Browser OAuth/React integration and production HTTPS/CORS/callback work.
+- Persistence, backups, rollback and production network configuration pass.
+
+References: documentation `docs/first-live/README.md`, `notes.md`, `oauth.md`,
+`ui-integration.md`. No signup, payment, Kafka or extra business endpoints are
+introduced by this change.

@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpHeaders;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -16,6 +17,7 @@ import reactor.core.publisher.Mono;
 import reactor.netty.DisposableServer;
 import reactor.netty.http.server.HttpServer;
 
+@ActiveProfiles("test")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = "eureka.client.enabled=false")
 class GatewayRoutingTests {
@@ -53,6 +55,7 @@ class GatewayRoutingTests {
 
     @DynamicPropertySource
     static void destinations(DynamicPropertyRegistry registry) {
+        GatewayTestEnvironment.register(registry);
         registry.add("NOTES_SERVICE_URL", () -> "http://127.0.0.1:" + NOTES.port());
         registry.add("USER_OAUTH_SERVICE_URL", () -> "http://127.0.0.1:" + USERS.port());
     }
@@ -69,7 +72,7 @@ class GatewayRoutingTests {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"/api/v1/categories", "/api/v1/notes", "/api/v1/notes/123",
+    @ValueSource(strings = {"/api/v1/notes", "/api/v1/notes/123",
             "/api/v1/public/categories", "/api/v1/public/notes", "/api/v1/public/notes/java"})
     void forwardsNotesPathsAndQueries(String path) {
         client().get().uri(path + "?page=0&size=10").exchange().expectStatus().isOk()
