@@ -1,11 +1,89 @@
 server:
-  port: 8080
+  port: ${SERVER_PORT}
 
 spring:
   application:
     name: technotes-api-gateway
+  cloud:
+    gateway:
+      server:
+        webflux:
+          httpclient:
+            connect-timeout: ${GATEWAY_CONNECT_TIMEOUT_MS}
+            response-timeout: ${GATEWAY_RESPONSE_TIMEOUT}
+          discovery:
+            locator:
+              enabled: false
+          default-filters:
+            - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials, RETAIN_FIRST
+          routes:
+            - id: public-categories
+              uri: ${NOTES_SERVICE_URL}
+              predicates:
+                - Path=/api/v1/public/categories
+                - Method=GET
+            - id: public-notes
+              uri: ${NOTES_SERVICE_URL}
+              predicates:
+                - Path=/api/v1/public/notes,/api/v1/public/notes/{slug}
+                - Method=GET
+            - id: create-category
+              uri: ${NOTES_SERVICE_URL}
+              predicates:
+                - Path=/api/v1/categories
+                - Method=POST
+            - id: notes-collection
+              uri: ${NOTES_SERVICE_URL}
+              predicates:
+                - Path=/api/v1/notes
+                - Method=GET,POST
+            - id: note-detail
+              uri: ${NOTES_SERVICE_URL}
+              predicates:
+                - Path=/api/v1/notes/{id}
+                - Method=GET,PATCH
+            - id: note-workflow
+              uri: ${NOTES_SERVICE_URL}
+              predicates:
+                - Path=/api/v1/notes/{id}/submit,/api/v1/notes/{id}/publish
+                - Method=POST
+            - id: user-profile
+              uri: ${USER_OAUTH_SERVICE_URL}
+              predicates:
+                - Path=/api/v1/users/me
+                - Method=GET
+          globalcors:
+            add-to-simple-url-handler-mapping: true
+            cors-configurations:
+              '[/api/v1/**]':
+                allowedOrigins:
+                  - ${UI_ORIGIN}
+                allowedMethods:
+                  - GET
+                  - POST
+                  - PATCH
+                  - OPTIONS
+                allowedHeaders:
+                  - Authorization
+                  - Content-Type
+                  - If-Match
+                exposedHeaders:
+                  - ETag
+                  - Location
+                allowCredentials: false
+                maxAge: ${CORS_MAX_AGE_SECONDS}
 
 eureka:
   client:
+    enabled: ${EUREKA_CLIENT_ENABLED}
     service-url:
-      defaultZone: http://localhost:8761/eureka/
+      defaultZone: ${EUREKA_URL}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
