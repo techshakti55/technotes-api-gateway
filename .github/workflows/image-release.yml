@@ -1,0 +1,49 @@
+name: Gateway integration and image release
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: gateway-integration-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  integration:
+    uses: techshakti55/technotes-documentation/.github/workflows/isolated-test.yml@5f3879ca6a4b0e73c8d730bf2e24622413a0c1d3
+    with:
+      harness_ref: 5f3879ca6a4b0e73c8d730bf2e24622413a0c1d3
+      gateway_ref: ${{ github.sha }}
+  publish:
+    needs: integration
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Authenticate to GitHub Container Registry
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+        run: printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+      - name: Build and publish tested source version
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          image="ghcr.io/techshakti55/technotes-api-gateway:sha-$SOURCE_SHA"
+          docker build --platform linux/amd64 \
+            --label org.opencontainers.image.source=https://github.com/techshakti55/technotes-api-gateway \
+            --label "org.opencontainers.image.revision=$SOURCE_SHA" \
+            -t "$image" .
+          docker push "$image"
+          digest=$(docker image inspect --format '{{index .RepoDigests 0}}' "$image")
+          printf '### Published image\n`%s`\n\nSource: `%s`\n\nProduction has not been deployed.\n' "$digest" "$SOURCE_SHA" >> "$GITHUB_STEP_SUMMARY"
+      - name: Registry logout
+        if: always()
+        run: docker logout ghcr.io
